@@ -21,30 +21,6 @@ from torch import nn
 from torchvision import transforms as T
 import pickle
 
-# INITIALIZE THE ENVIRONMENT
-
-env = gym_super_mario_bros.make("SuperMarioBros-1-1-v0")
-# The action space of the game comprehend the 12 following moves:
-# - NOOP --> do nothing
-# - right --> walk right
-# - right + A --> jump right
-# - right + B --> run right
-# - right + A + B --> run and jump right
-# - A --> jump
-# - left --> walk left
-# - left + A --> jump left
-# - left + B --> run left
-# - left + A + B --> run and jump left
-# - down
-# - up
-
-env = JoypadSpace(env, [["NOOP"], ["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"], ["down"], ["up"],
-                        ["A"]])
-# , ["left"], ["left", "A"], ["left", "B"], ["left", "A", "B"]
-env.reset()
-next_state, reward, done, info = env.step(action=0)
-print(f"{next_state.shape}, \n {reward}, \n {done}, \n {info}")
-
 
 # PREPROCESS THE ENVIRONMENT
 class SkipFrame(gym.Wrapper):
@@ -118,41 +94,53 @@ class ResizeObservation(gym.ObservationWrapper):
         # squeeze: used when we want to remove single-dimensional entries from the shape of an array.
         return observation
 
-
-# Apply Wrappers to environment
-env = SkipFrame(env, skip=4)
-env = GrayScaleObservation(env)
-env = ResizeObservation(env, shape=84)
-env = FrameStack(env, num_stack=4)
-
-
 # AGENT
 
-class Mario:
-    def __init__(self):
-        pass
+# NEURAL NETWORK
+class MarioNet(nn.Module):
+    """
+    mini cnn structure
+    input -> (conv2d + relu) x 3 -> flatten -> (dense + relu) x 2 -> output
+    """
 
-    def act(self, state):
-        """Given a state, choose an epsilon-greedy action"""
-        pass
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        c, h, w = input_dim
 
-    def cache(self, experience):
-        """Store an experience to memory"""
-        pass
+        if h != 84:
+            raise ValueError(f"Expecting input height: 84, got: {h}")
+        if w != 84:
+            raise ValueError(f"Expecting input width: 84, got: {w}")
 
-    def recall(self):
-        """Sample experiences from memory"""
-        pass
+        self.online = nn.Sequential(
+            nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(3136, 512),
+            nn.ReLU(),
+            nn.Linear(512, output_dim)
+        )
 
-    def learn(self):
-        """Update online action value (Q) function with a batch of experiences"""
-        pass
+        self.target = copy.deepcopy(self.online)
+
+        # Q_target parameters are frozen
+        for p in self.target.parameters():
+            p.requires_grad = False
+
+    def forward(self, input, model):
+        if model == "online":
+            return self.online(input)
+        elif model == "target":
+            return self.target(input)
 
 
-# AGENT - ACT
 class Mario:
     def __init__(self, state_dim, action_dim, save_dir):
-        # assign initialization to parameters
+        # init values for the function act
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.save_dir = save_dir
@@ -171,6 +159,25 @@ class Mario:
         self.curr_step = 0
         self.save_every = 5e5  # save every 500000 experiences
 
+        # init values for the function cache and recall
+        self.memory = deque(maxlen=100000)
+        self.batch_size = 32
+
+        # init values for function TD target and TD estimate
+        self.gamma = 0.9
+
+        # init values for updating model
+        # first we initialize the method used to
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
+        # define the loss measure
+        self.loss_fn = torch.nn.SmoothL1Loss()
+
+        # init values for learning
+        self.burnin = 1e4  # min. experience before training
+        self.learn_every = 3  # no. of experiences between updates to Q_online
+        self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
+
+    # ACT
     def act(self, state):
         """
         Given a state, choose an epsilon-greedy action and update value step.
@@ -213,14 +220,7 @@ class Mario:
         self.curr_step += 1
         return action_idx
 
-
-# CACHE AND RECALL
-class Mario(Mario):
-    def __init__(self, state_dim, action_dim, save_dir):
-        super().__init__(state_dim, action_dim, save_dir)
-        self.memory = deque(maxlen=100000)
-        self.batch_size = 32
-
+    # CACHE AND RECALL
     def cache(self, state, next_state, action, reward, done):
         """
         Store the experience to memory (replay buffer)
@@ -264,55 +264,7 @@ class Mario(Mario):
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
-
-# LEARN
-class MarioNet(nn.Module):
-    """
-    mini cnn structure
-    input -> (conv2d + relu) x 3 -> flatten -> (dense + relu) x 2 -> output
-    """
-
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        c, h, w = input_dim
-
-        if h != 84:
-            raise ValueError(f"Expecting input height: 84, got: {h}")
-        if w != 84:
-            raise ValueError(f"Expecting input width: 84, got: {w}")
-
-        self.online = nn.Sequential(
-            nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Flatten(),
-            nn.Linear(3136, 512),
-            nn.ReLU(),
-            nn.Linear(512, output_dim)
-        )
-
-        self.target = copy.deepcopy(self.online)
-
-        # Q_target parameters are frozen
-        for p in self.target.parameters():
-            p.requires_grad = False
-
-    def forward(self, input, model):
-        if model == "online":
-            return self.online(input)
-        elif model == "target":
-            return self.target(input)
-
-
-# TD ESTIMATE AND TD TARGET
-class Mario(Mario):
-    def __init__(self, state_dim, action_dim, save_dir):
-        super().__init__(state_dim, action_dim, save_dir)
-        self.gamma = 0.9
-
+    # TD ESTIMATE AND TD TARGET
     def td_estimate(self, state, action):
         # Q_online and Q_target are two ConNets
         # since model = "online" we will apply Q_online
@@ -337,16 +289,7 @@ class Mario(Mario):
         # at the end we return reward + gamma*Q_target(a', s')
         return (reward + (1 - done.float()) * self.gamma * next_Q).float()
 
-
-# UPDATE MODEL
-class Mario(Mario):
-    def __init__(self, state_dim, action_dim, save_dir):
-        super().__init__(state_dim, action_dim, save_dir)
-        # first we initialize the method used to
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
-        # define the loss measure
-        self.loss_fn = torch.nn.SmoothL1Loss()
-
+    # UPDATE THE MODEL
     def update_Q_online(self, td_estimate, td_target):
         # Evaluate the loss
         loss = self.loss_fn(td_estimate, td_target)
@@ -360,11 +303,10 @@ class Mario(Mario):
 
     def sync_Q_target(self):
         # Loads a model’s parameter dictionary using a deserialized state_dict
-        self.net.target.load_state_dict(self.net.online.state.dict())
+        self.net.target.load_state_dict(self.net.online.state_dict())
 
 
-# SAVE CHECKPOINTS
-class Mario(Mario):
+    # SAVE THE MODEL
     def save(self):
         save_path = (
                 self.save_dir / f"mario_net_{int(self.curr_step // self.save_every)}.chkpt"
@@ -373,17 +315,11 @@ class Mario(Mario):
             dict(model=self.net.state_dict(), exploration_rate=self.exploration_rate),
             save_path,
         )
+
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
 
 
-# PUT ALL TOGETHER
-class Mario(Mario):
-    def __init__(self, state_dim, action_dim, save_dir):
-        super().__init__(state_dim, action_dim, save_dir)
-        self.burnin = 1e4  # min. experience before training
-        self.learn_every = 3  # no. of experiences between updates to Q_online
-        self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
-
+    # LEARN
     def learn(self):
         if self.curr_step % self.sync_every == 0:
             self.sync_Q_target()
@@ -515,89 +451,91 @@ class MetricLogger:
             plt.clf()
 
 
-# TRAIN THE MODEL
-use_cuda = torch.cuda.is_available()
-print(f"Using CUDA: {use_cuda}")
-print()
+# PREPARE THE ENVIRONMENT AND TRAIN THE MODEL
+def prepare_env():
+    # INITIALIZE THE ENVIRONMENT
 
-save_dir = Path("checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-save_dir.mkdir(parents=True)
+    env = gym_super_mario_bros.make("SuperMarioBros-1-1-v0")
+    # The action space of the game comprehend the 12 following moves:
+    # - NOOP --> do nothing
+    # - right --> walk right
+    # - right + A --> jump right
+    # - right + B --> run right
+    # - right + A + B --> run and jump right
+    # - A --> jump
+    # - left --> walk left
+    # - left + A --> jump left
+    # - left + B --> run left
+    # - left + A + B --> run and jump left
+    # - down -->  duck, enter a pipe or climb downwards on a beanstalk
+    # - up -->  climb upwards on a beanstalk
 
-mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
+    env = JoypadSpace(env, [["NOOP"], ["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"], ["down"], ["up"],
+                            ["A"], ["left"]])
+    # , ["left"], ["left", "A"], ["left", "B"], ["left", "A", "B"]
+    env.reset()
+    next_state, reward, done, info = env.step(action=0)
+    print(f"{next_state.shape}, \n {reward}, \n {done}, \n {info}")
 
-logger = MetricLogger(save_dir)
+    # Apply Wrappers to environment
+    env = SkipFrame(env, skip=4)
+    env = GrayScaleObservation(env)
+    env = ResizeObservation(env, shape=84)
+    env = FrameStack(env, num_stack=4)
+    return env
 
-episodes = 5
-for e in range(episodes):
-    print(e)
-    state = env.reset()
 
-    # Play the game!
-    while True:
-        # Run agent on the state
-        action = mario.act(state)
+if __name__ == '__main__':
+    env = prepare_env()
+    # train the model
+    use_cuda = torch.cuda.is_available()
+    print(f"Using CUDA: {use_cuda}")
+    print()
 
-        # Agent performs action
-        next_state, reward, done, info = env.step(action)
-        env.render()
+    save_dir = Path("../checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    save_dir.mkdir(parents=True)
 
-        # Remember
-        mario.cache(state, next_state, action, reward, done)
+    mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
 
-        # Learn
-        q, loss = mario.learn()
+    logger = MetricLogger(save_dir)
 
-        # Logging
-        logger.log_step(reward, loss, q)
+    episodes = 51
+    for e in range(episodes):
+        print(e)
+        state = env.reset()
 
-        # Update state
-        state = next_state
+        # Play the game!
+        while True:
+            # Run agent on the state
+            action = mario.act(state)
 
-        # Check if end of game
-        if done or info["flag_get"]:
-            break
+            # Agent performs action
+            next_state, reward, done, info = env.step(action)
+            env.render()
 
-    logger.log_episode()
-    logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
-    # if e % 20 == 0:
-    # logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
+            # Remember
+            mario.cache(state, next_state, action, reward, done)
 
-env.close()
+            # Learn
+            q, loss = mario.learn()
 
-# serialize pickle
-with open("mariosave.pkl", "wb") as f_out:
-    pickle.dump(mario, f_out)
+            # Logging
+            logger.log_step(reward, loss, q)
 
-# USE THE MODEL
-# episodes = 5
-# for e in range(episodes):
-#     state = env.reset()
-#     print(e)
-#
-#     while True:
-#         # Run agent on the state
-#         action = mario.act(state)
-#
-#         # Agent performs action
-#         next_state, reward, done, info = env.step(action)
-#         #env.render()
-#
-#         # Remember
-#         mario.cache(state, next_state, action, reward, done)
-#
-#         # Logging
-#         logger.log_step(reward, loss, q)
-#
-#         # Update state
-#         state = next_state
-#
-#         # Check if end of game
-#         if done or info["flag_get"]:
-#             break
-#
-#     logger.log_episode()
-#     logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
-#     # if e % 20 == 0:
-#     # logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
-#
-# #env.close()
+            # Update state
+            state = next_state
+
+            # Check if end of game
+            if done or info["flag_get"]:
+                break
+
+        logger.log_episode()
+        logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
+        # if e % 20 == 0:
+        # logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
+
+    env.close()
+
+    # serialize pickle
+    with open("../mariosave.pkl", "wb") as f_out:
+        pickle.dump(mario, f_out)
