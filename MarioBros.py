@@ -471,7 +471,7 @@ def prepare_env():
     # - up -->  climb upwards on a beanstalk
 
     env = JoypadSpace(env, [["NOOP"], ["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"], ["down"], ["up"],
-                            ["A"], ["left"]])
+                            ["A"]])
     # , ["left"], ["left", "A"], ["left", "B"], ["left", "A", "B"]
     env.reset()
     next_state, reward, done, info = env.step(action=0)
@@ -499,7 +499,7 @@ if __name__ == '__main__':
 
     logger = MetricLogger(save_dir)
 
-    episodes = 51
+    episodes = 10
     for e in range(episodes):
         print(e)
         state = env.reset()

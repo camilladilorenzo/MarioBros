@@ -1,21 +1,17 @@
 import pickle
 import time
-from pathlib import Path
-import datetime
-from MarioBros import Mario, MarioNet, prepare_env, MetricLogger
+from MarioBros import Mario, MarioNet, prepare_env
 
 
 if __name__ == '__main__':
     with open("../mariosave.pkl", "rb") as f_in:
         mario = pickle.load(f_in)
 
-    save_dir = Path("../checkpoints_test") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    save_dir.mkdir(parents=True)
-
-    logger = MetricLogger(save_dir)
     env = prepare_env()
+    frames = []
     episodes = 5
     for e in range(episodes):
+        print(e)
         done = False
         state = env.reset()
         while not done:
@@ -24,7 +20,7 @@ if __name__ == '__main__':
 
             # Agent performs action
             next_state, reward, done, info = env.step(action)
-            env.render()
+            frames.append(env.render(mode="rgb_array"))
             time.sleep(0.05)
 
             # Update state
@@ -33,6 +29,5 @@ if __name__ == '__main__':
             if done or info["flag_get"]:
                 break
 
-            logger.log_episode()
-            logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
-        env.close()
+    with open("../frame_img.pkl", "wb") as frames_out:
+        pickle.dump(frames, frames_out)
