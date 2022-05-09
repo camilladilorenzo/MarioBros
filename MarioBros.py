@@ -537,5 +537,5 @@ if __name__ == '__main__':
     env.close()
 
     # serialize pickle
-    with open("../mariosave.pkl", "wb") as f_out:
+    with open("mariosave.pkl", "wb") as f_out:
         pickle.dump(mario, f_out)
