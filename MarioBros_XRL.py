@@ -1,14 +1,11 @@
 import pickle
-from PIL import Image
+# from PIL import Image
 import numpy as np
 import torch
-from MarioBros import Mario, MarioNet
+from torchvision import transforms as T
+from MarioBros import Mario, MarioNet, GrayScaleObservation
+# from gym.wrappers import FrameStack
 
-# import torchvision
-# from torchvision import datasets, transforms
-# from torch import nn, optim
-# from torch.nn import functional as F
-# import shap
 
 if __name__ == '__main__':
     with open("frame_img.pkl", "rb") as frames_in:
@@ -16,18 +13,23 @@ if __name__ == '__main__':
     with open("mariosave.pkl", "rb") as f_in:
         mario = pickle.load(f_in)
 
-    img = frames_images[20]
-    state = torch.tensor(img, dtype=torch.float)
-    state = state.unsqueeze(0)
-    action = mario.net(state, model = "online")
+    # Image.fromarray(frames_images[20]).show()
+    # Image.fromarray(frames_images[50]).show()
+    # Image.fromarray(frames_images[59]).show()
+
+    transforms = T.Compose(
+        # resize image in seLf.shape dimensions and then normalize image
+        [T.Resize((84, 84)), T.Normalize(0, 255)]
+    )
+    img = frames_images[59]
+    img = np.transpose(np.asarray(img), (2, 0, 1))
+    img = torch.tensor(img, dtype=torch.float64)
+    bw_transform = T.Grayscale()
+    img = bw_transform(img)
+
+    #state = FrameStack(img, num_stack=4)
+    state = transforms(img).unsqueeze(0)
+    net = mario.net.double()
+    action = net(state, model = "target")
     print(action)
-    Image.fromarray(frames_images[20]).show()
-    Image.fromarray(frames_images[130]).show()
-
-    # frames_tens = []
-    # for i in range(len(frames_images)):
-    #     img = np.transpose(np.asarray(frames_images[i]), (2, 0, 1))
-    #     frames_tens.append(torch.tensor(img, dtype=torch.float))
-
-
 
