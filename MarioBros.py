@@ -472,7 +472,7 @@ def prepare_env():
 
     env = JoypadSpace(env, [["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"],
                             ["A"]])
-    # , ["left"], ["left", "A"], ["left", "B"], ["left", "A", "B"]
+    # down, up, ["left"], ["left", "A"], ["left", "B"], ["left", "A", "B"]
     env.reset()
     next_state, reward, done, info = env.step(action=0)
     print(f"{next_state.shape}, \n {reward}, \n {done}, \n {info}")
@@ -499,7 +499,7 @@ if __name__ == '__main__':
 
     logger = MetricLogger(save_dir)
 
-    episodes = 70
+    episodes = 200
     for e in range(episodes):
         print(e)
         state = env.reset()
