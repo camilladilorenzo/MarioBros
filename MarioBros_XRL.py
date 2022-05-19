@@ -6,7 +6,6 @@ import torch
 from torchvision import transforms as T
 from MarioBros import Mario, MarioNet, prepare_env
 
-
 if __name__ == '__main__':
     with open("frame_img.pkl", "rb") as frames_in:
         frames_images = pickle.load(frames_in)
@@ -48,24 +47,24 @@ if __name__ == '__main__':
         mod_frames.append(img)
 
     act = []
+
     net = mario.net.double()
     for i in range(4,len(frames_images)):
-        state = torch.stack((mod_frames[i - 0], mod_frames[i-1], mod_frames[i-2], mod_frames[i-3]))
-        state = state.squeeze(1)
+        state = torch.stack((mod_frames[i - 0], mod_frames[i - 1], mod_frames[i - 2], mod_frames[i - 3]))
+        state = state.squeeze(1) # 4 3 2 1
         state = state.unsqueeze(0)
-        act.append(net(state, model="target"))
+        act.append(net(state, model="online"))
 
 
     labels_actions = []
     for i in range(len(act)):
-        act_i = np.asarray(act[i])
-        if np.argmax(act_i) == 0:
+        if torch.argmax(act[i], axis=1).item() == 0:
             labels_actions.append("right")
-        elif np.argmax(act_i) == 1:
+        elif torch.argmax(act[i], axis=1).item() == 1:
             labels_actions.append("right + A")
-        elif np.argmax(act_i) == 2:
+        elif torch.argmax(act[i], axis=1).item() == 2:
             labels_actions.append("right + B")
-        elif np.argmax(act_i) == 3:
+        elif torch.argmax(act[i], axis=1).item() == 3:
             labels_actions.append("right + A + B")
         else:
             labels_actions.append("A")

@@ -1,9 +1,8 @@
 import pickle
 import time
-from MarioBros import Mario, MarioNet, prepare_env
+from MarioBros import prepare_env
+from MarioBros import Mario, MarioNet
 import copy
-
-
 
 if __name__ == '__main__':
     with open("mariosave.pkl", "rb") as f_in:
