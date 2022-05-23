@@ -1,11 +1,6 @@
-import pickle
 import time
-
 import torch
-
-from MarioBros import prepare_env
-from MarioBros import Mario, MarioNet
-import copy
+from MarioBros import prepare_env, MarioNet
 
 if __name__ == '__main__':
     env = prepare_env()
