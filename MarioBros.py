@@ -499,7 +499,7 @@ if __name__ == '__main__':
 
     logger = MetricLogger(save_dir)
 
-    episodes = 200
+    episodes = 2000
     for e in range(episodes):
         print(e)
         state = env.reset()

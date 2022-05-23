@@ -96,3 +96,13 @@ if __name__ == '__main__':
     plt.subplots_adjust(top = 0.98, bottom = 0, right = 0.99, left = 0,wspace=0, hspace=0.1)
     plt.margins(0, 0)
     fig.show()
+
+    # plt.imshow(pil_im[0])
+    # from lime import lime_image
+    #
+    #
+    # state_lime = torch.stack((mod_frames[29], mod_frames[28], mod_frames[27], mod_frames[26]))
+    # state_lime = state_lime.squeeze(1)
+    # state_lime = state_lime.unsqueeze(0)
+    # explainer = lime_image.LimeImageExplainer()
+    # explaination = explainer.explain_instance(frames_images[27], net, top_labels=5, hide_color=0, num_samples=1000)
