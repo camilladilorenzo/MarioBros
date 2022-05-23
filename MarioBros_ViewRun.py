@@ -8,6 +8,7 @@ if __name__ == '__main__':
     marionet_file = 'marionetsave.pt'
     marionet = MarioNet((4, 84, 84), env.action_space.n).float()
     marionet.load_state_dict(torch.load(marionet_file, map_location=torch.device('cpu'))['model'])
+    marionet.eval()
 
     done = False
     state = env.reset()
