@@ -21,6 +21,29 @@ from torch import nn
 from torchvision import transforms as T
 import pickle
 
+# PARAMETERS AGENT
+EXPL_RATE = 1
+EXPL_RATE_DECAY =0.99999975
+EXPL_RATE_MIN = 0.1
+SAVE_EVERY = 5e5
+BATCH_SIZE = 32
+GAMMA = 0.9
+BURNIN = 1e4
+LEARN_EVERY = 3
+SYNC_EVERY = 1e4
+
+# PARAMETERS ENVIRONMENT
+possible_actions = [["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"], ["A"], ["left"], ["left", "A"],
+                    ["left", "B"], ["left", "A", "B"]]
+SKIPFRAME = 4
+SHAPEIMAGE = 84
+NUMSTACK = 4
+
+# PARAMETERS TRAIN
+save_dir = Path("./checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+save_dir.mkdir(parents=True)
+episodes = 2000
+
 
 # PREPROCESS THE ENVIRONMENT
 class SkipFrame(gym.Wrapper):
@@ -152,19 +175,19 @@ class Mario:
         if self.use_cuda:
             self.net = self.net.to(device="cuda")
 
-        self.exploration_rate = 1
-        self.exploration_rate_decay = 0.99999975
-        self.exploration_rate_min = 0.1
+        self.exploration_rate = EXPL_RATE
+        self.exploration_rate_decay = EXPL_RATE_DECAY
+        self.exploration_rate_min = EXPL_RATE_MIN
         # no. experiences between saving MarioNet
         self.curr_step = 0
-        self.save_every = 5e5  # save every 500000 experiences
+        self.save_every = SAVE_EVERY  # save every 500000 experiences
 
         # init values for the function cache and recall
         self.memory = deque(maxlen=100000)
-        self.batch_size = 32
+        self.batch_size = BATCH_SIZE
 
         # init values for function TD target and TD estimate
-        self.gamma = 0.9
+        self.gamma = GAMMA
 
         # init values for updating model
         # first we initialize the method used to
@@ -173,9 +196,9 @@ class Mario:
         self.loss_fn = torch.nn.SmoothL1Loss()
 
         # init values for learning
-        self.burnin = 1e4  # min. experience before training
-        self.learn_every = 3  # no. of experiences between updates to Q_online
-        self.sync_every = 1e4  # no. of experiences between Q_target & Q_online sync
+        self.burnin = BURNIN  # min. experience before training
+        self.learn_every = LEARN_EVERY  # no. of experiences between updates to Q_online
+        self.sync_every = SYNC_EVERY  # no. of experiences between Q_target & Q_online sync
 
     # ACT
     def act(self, state):
@@ -315,7 +338,6 @@ class Mario:
             dict(model=self.net.state_dict(), exploration_rate=self.exploration_rate),
             save_path,
         )
-
         print(f"MarioNet saved to {save_path} at step {self.curr_step}")
 
 
@@ -454,34 +476,17 @@ class MetricLogger:
 # PREPARE THE ENVIRONMENT AND TRAIN THE MODEL
 def prepare_env():
     # INITIALIZE THE ENVIRONMENT
-
     env = gym_super_mario_bros.make("SuperMarioBros-1-1-v0")
-    # The action space of the game comprehend the 12 following moves:
-    # - NOOP --> do nothing
-    # - right --> walk right
-    # - right + A --> jump right
-    # - right + B --> run right
-    # - right + A + B --> run and jump right
-    # - A --> jump
-    # - left --> walk left
-    # - left + A --> jump left
-    # - left + B --> run left
-    # - left + A + B --> run and jump left
-    # - down -->  duck, enter a pipe or climb downwards on a beanstalk
-    # - up -->  climb upwards on a beanstalk
-
-    env = JoypadSpace(env, [["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"],
-                            ["A"]])
-    # down, up, ["left"], ["left", "A"], ["left", "B"], ["left", "A", "B"]
+    env = JoypadSpace(env, possible_actions)
     env.reset()
     next_state, reward, done, info = env.step(action=0)
     print(f"{next_state.shape}, \n {reward}, \n {done}, \n {info}")
 
     # Apply Wrappers to environment
-    env = SkipFrame(env, skip=4)
+    env = SkipFrame(env, skip=SKIPFRAME)
     env = GrayScaleObservation(env)
-    env = ResizeObservation(env, shape=84)
-    env = FrameStack(env, num_stack=4)
+    env = ResizeObservation(env, shape=SHAPEIMAGE)
+    env = FrameStack(env, num_stack=NUMSTACK)
     return env
 
 
@@ -492,14 +497,11 @@ if __name__ == '__main__':
     print(f"Using CUDA: {use_cuda}")
     print()
 
-    save_dir = Path("../checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    save_dir.mkdir(parents=True)
 
-    mario = Mario(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir)
-
+    mario = Mario(state_dim=(NUMSTACK, SHAPEIMAGE, SHAPEIMAGE), action_dim=env.action_space.n, save_dir=save_dir)
     logger = MetricLogger(save_dir)
 
-    episodes = 2000
+
     for e in range(episodes):
         print(e)
         state = env.reset()
@@ -511,7 +513,7 @@ if __name__ == '__main__':
 
             # Agent performs action
             next_state, reward, done, info = env.step(action)
-            env.render()
+            # env.render()
 
             # Remember
             mario.cache(state, next_state, action, reward, done)
@@ -534,7 +536,7 @@ if __name__ == '__main__':
         # if e % 20 == 0:
         # logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
 
-    env.close()
+    # env.close()
 
     # serialize pickle
     with open("mariosave.pkl", "wb") as f_out:
