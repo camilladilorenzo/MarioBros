@@ -80,15 +80,15 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(20,20))
 
     # setting values to rows and column variables
-    rows = 5
-    columns = 5
+    rows = 8
+    columns = 8
 
     pil_im = []
     for i in range(4,len(frames_images)):
         # reading images
         pil_im.append(Image.fromarray(frames_images[i]))
 
-    for i in range(20):
+    for i in range(64):
         # Adds a subplot at the 1st position
         fig.add_subplot(rows, columns, i + 1)
 
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     plt.margins(0, 0)
     fig.show()
 
-    plt.imshow(pil_im[0])
+
 
 
     # LIME IMPLEMENTATION
@@ -151,11 +151,12 @@ if __name__ == '__main__':
 
 
     explainer = lime_image.LimeImageExplainer()
-    explanation = explainer.explain_instance(concat_im, net_lime, top_labels=3, hide_color=0, num_samples=1000)
+    explanation = explainer.explain_instance(concat_im, net_lime, top_labels=5, hide_color=0, num_samples=1000)
 
-    temp, mask = explanation.get_image_and_mask(explanation.top_labels[0], positive_only=False, num_features=10,
+    temp, mask = explanation.get_image_and_mask(explanation.top_labels[0], positive_only=False, num_features=5,
                                                 hide_rest=False)
 
     # NON SO PERCHE NON MOSTRA IMMAGINE
-    img_boundry2 = mark_boundaries(temp / 255.0, mask)
+    img_boundry2 = mark_boundaries(temp/255.0, mask)
     plt.imshow(img_boundry2)
+    plt.show()
