@@ -156,7 +156,6 @@ if __name__ == '__main__':
     temp, mask = explanation.get_image_and_mask(explanation.top_labels[0], positive_only=False, num_features=5,
                                                 hide_rest=False)
 
-    # NON SO PERCHE NON MOSTRA IMMAGINE
     img_boundry2 = mark_boundaries(temp/255.0, mask)
     plt.imshow(img_boundry2)
     plt.show()
