@@ -10,6 +10,7 @@ from pathlib import Path
 import gym
 # Super Mario environment for OpenAI Gym
 import gym_super_mario_bros
+from gym_super_mario_bros.actions import RIGHT_ONLY, SIMPLE_MOVEMENT, COMPLEX_MOVEMENT
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -19,7 +20,8 @@ from gym.wrappers import FrameStack
 from nes_py.wrappers import JoypadSpace
 from torch import nn
 from torchvision import transforms as T
-import pickle
+
+EPISODES = 40000
 
 # PARAMETERS AGENT
 EXPL_RATE = 1
@@ -33,16 +35,14 @@ LEARN_EVERY = 3
 SYNC_EVERY = 1e4
 
 # PARAMETERS ENVIRONMENT
-possible_actions = [["right"], ["right", "A"], ["right", "B"], ["right", "A", "B"], ["A"], ["left"], ["left", "A"],
-                    ["left", "B"], ["left", "A", "B"]]
+possible_actions = SIMPLE_MOVEMENT
 SKIPFRAME = 4
 SHAPEIMAGE = 84
-NUMSTACK = 4
+NUMSTACK = 1
 
 # PARAMETERS TRAIN
 save_dir = Path("./checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 save_dir.mkdir(parents=True)
-episodes = 2000
 
 
 # PREPROCESS THE ENVIRONMENT
@@ -502,7 +502,7 @@ if __name__ == '__main__':
     logger = MetricLogger(save_dir)
 
 
-    for e in range(episodes):
+    for e in range(EPISODES):
         print(e)
         state = env.reset()
 
@@ -536,8 +536,10 @@ if __name__ == '__main__':
         # if e % 20 == 0:
         # logger.record(episode=e, epsilon=mario.exploration_rate, step=mario.curr_step)
 
-    # env.close()
+    env.close()
 
     # serialize pickle
-    with open("mariosave.pkl", "wb") as f_out:
-        pickle.dump(mario, f_out)
+    torch.save(
+        dict(model=mario.net.state_dict(), exploration_rate=mario.exploration_rate),
+        'marionet_save.pt',
+    )
